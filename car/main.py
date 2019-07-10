@@ -10,8 +10,8 @@ CHANNEL_RIGHT = 17
 CHANNEL_FORWARD = 27
 CHANNEL_REVERSE = 22
 
-# Must be between 0 and 100
-FORWARD_SPEED = 50
+# Must be between 0 and 1.0
+MAX_FORWARD_SPEED = .5
 
 
 class Car(object):
@@ -28,9 +28,10 @@ class Car(object):
     def right(self):
         self._set_left_right(1, 0)
 
-    def forward(self):
+    def forward(self, speed):
         GPIO.output(CHANNEL_REVERSE, 1)
-        self._forward_pwm.ChangeDutyCycle(FORWARD_SPEED)
+        dc = (-speed * MAX_FORWARD_SPEED + 1) * 100.
+        self._forward_pwm.ChangeDutyCycle(dc)
 
     def stop(self):
         self._forward_pwm.ChangeDutyCycle(100)
@@ -79,17 +80,17 @@ def main():
         while True:
             pygame.event.wait()
             _ = pygame.event.get()
-            x = joystick.get_axis(0)
+            x = joystick.get_axis(2)
             y = joystick.get_axis(1)
             print('\rx={:.2f}, y={:.2f}'.format(x, y), end='')
-            if x <= -.5:
+            if x <= -.4:
                 car.left()
-            elif x >= .5:
+            elif x >= .4:
                 car.right()
             else:
                 car.straight()
-            if y <= -.3:
-                car.forward()
+            if y <= -.1:
+                car.forward(-y)
             elif y >= .3:
                 car.reverse()
             else:
