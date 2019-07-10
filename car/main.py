@@ -78,7 +78,7 @@ def main():
             pygame.event.wait()
             _ = pygame.event.get()
             x = joystick.get_axis(0)
-            y = joystick.get_axis(5)
+            y = joystick.get_axis(1)
             print('\rx={:.2f}, y={:.2f}'.format(x, y), end='')
             if x <= -.5:
                 car.left()
@@ -86,9 +86,9 @@ def main():
                 car.right()
             else:
                 car.straight()
-            if y <= -.5:
+            if y <= -.3:
                 car.forward()
-            elif y >= .5:
+            elif y >= .3:
                 car.reverse()
             else:
                 car.stop()
