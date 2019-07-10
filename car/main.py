@@ -12,6 +12,7 @@ CHANNEL_REVERSE = 22
 
 # Must be between 0 and 1.0
 MAX_FORWARD_SPEED = .5
+MAX_REVERSE_SPEED = .7
 
 
 class Car(object):
@@ -29,6 +30,7 @@ class Car(object):
         self._set_left_right(1, 0)
 
     def forward(self, speed):
+        self._reverse_pwm.ChangeDutyCycle(100)
         GPIO.output(CHANNEL_REVERSE, 1)
         dc = (-speed * MAX_FORWARD_SPEED + 1) * 100.
         self._forward_pwm.ChangeDutyCycle(dc)
@@ -36,15 +38,18 @@ class Car(object):
     def stop(self):
         self._forward_pwm.ChangeDutyCycle(100)
         GPIO.output(CHANNEL_FORWARD, 1)
+        self._reverse_pwm.ChangeDutyCycle(100)
         GPIO.output(CHANNEL_REVERSE, 1)
 
-    def reverse(self):
+    def reverse(self, speed):
         self._forward_pwm.ChangeDutyCycle(100)
         GPIO.output(CHANNEL_FORWARD, 1)
-        GPIO.output(CHANNEL_REVERSE, 0)
+        dc = (-speed * MAX_REVERSE_SPEED + 1) * 100.
+        self._reverse_pwm.ChangeDutyCycle(dc)
 
     def shutdown(self):
         self._forward_pwm.stop()
+        self._reverse_pwm.stop()
         GPIO.cleanup()
 
     def _init_gpio(self):
@@ -54,6 +59,8 @@ class Car(object):
             GPIO.setup(channel, GPIO.OUT, initial=GPIO.HIGH)
         self._forward_pwm = GPIO.PWM(CHANNEL_FORWARD, 10)
         self._forward_pwm.start(100)
+        self._reverse_pwm = GPIO.PWM(CHANNEL_REVERSE, 10)
+        self._reverse_pwm.start(100)
 
     def _set_left_right(self, left, right):
         assert left | right, 'Cannot steer both left and right simultaneously.'
@@ -91,8 +98,8 @@ def main():
                 car.straight()
             if y <= -.1:
                 car.forward(-y)
-            elif y >= .3:
-                car.reverse()
+            elif y >= .1:
+                car.reverse(y)
             else:
                 car.stop()
     except KeyboardInterrupt:
