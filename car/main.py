@@ -10,6 +10,9 @@ CHANNEL_RIGHT = 17
 CHANNEL_FORWARD = 27
 CHANNEL_REVERSE = 22
 
+# Must be between 0 and 100
+FORWARD_SPEED = 50
+
 
 class Car(object):
 
@@ -26,15 +29,21 @@ class Car(object):
         self._set_left_right(1, 0)
 
     def forward(self):
-        self._set_forward_reverse(0, 1)
+        GPIO.output(CHANNEL_REVERSE, 1)
+        self._forward_pwm.ChangeDutyCycle(FORWARD_SPEED)
 
     def stop(self):
-        self._set_forward_reverse(1, 1)
+        self._forward_pwm.ChangeDutyCycle(100)
+        GPIO.output(CHANNEL_FORWARD, 1)
+        GPIO.output(CHANNEL_REVERSE, 1)
 
     def reverse(self):
-        self._set_forward_reverse(1, 0)
+        self._forward_pwm.ChangeDutyCycle(100)
+        GPIO.output(CHANNEL_FORWARD, 1)
+        GPIO.output(CHANNEL_REVERSE, 0)
 
     def shutdown(self):
+        self._forward_pwm.stop()
         GPIO.cleanup()
 
     def _init_gpio(self):
@@ -42,6 +51,8 @@ class Car(object):
         for channel in (CHANNEL_LEFT, CHANNEL_RIGHT,
                         CHANNEL_FORWARD, CHANNEL_REVERSE):
             GPIO.setup(channel, GPIO.OUT, initial=GPIO.HIGH)
+        self._forward_pwm = GPIO.PWM(CHANNEL_FORWARD, 10)
+        self._forward_pwm.start(100)
 
     def _set_left_right(self, left, right):
         assert left | right, 'Cannot steer both left and right simultaneously.'
@@ -51,15 +62,6 @@ class Car(object):
         else:
             GPIO.output(CHANNEL_RIGHT, right)
             GPIO.output(CHANNEL_LEFT, left)
-
-    def _set_forward_reverse(self, forward, reverse):
-        assert forward | reverse, 'Cannot forward and reverse simulatenously.'
-        if forward:
-            GPIO.output(CHANNEL_FORWARD, forward)
-            GPIO.output(CHANNEL_REVERSE, reverse)
-        else:
-            GPIO.output(CHANNEL_REVERSE, reverse)
-            GPIO.output(CHANNEL_FORWARD, forward)
 
 
 def main():
