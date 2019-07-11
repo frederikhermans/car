@@ -10,15 +10,22 @@ CHANNEL_RIGHT = 17
 CHANNEL_FORWARD = 27
 CHANNEL_REVERSE = 22
 
-# Must be between 0 and 1.0
-MAX_FORWARD_SPEED = 1.0
-MAX_REVERSE_SPEED = 1.0
-
 
 class Car(object):
 
     def __init__(self):
-        self._init_gpio()
+        self._max_forward_speed = 1.0
+        self._max_reverse_speed = 1.0
+
+        # Set up GPIO pins and pulse width modulators (PWMs)
+        GPIO.setmode(GPIO.BCM)
+        for channel in (CHANNEL_LEFT, CHANNEL_RIGHT,
+                        CHANNEL_FORWARD, CHANNEL_REVERSE):
+            GPIO.setup(channel, GPIO.OUT, initial=GPIO.HIGH)
+        self._forward_pwm = GPIO.PWM(CHANNEL_FORWARD, 10)
+        self._forward_pwm.start(100)
+        self._reverse_pwm = GPIO.PWM(CHANNEL_REVERSE, 10)
+        self._reverse_pwm.start(100)
 
     def set_direction(self, direction):
         assert -1 <= direction and direction <= 1, 'Direction must be between -1 and 1.'
@@ -40,30 +47,46 @@ class Car(object):
             self._reverse_pwm.ChangeDutyCycle(100)
             GPIO.output(CHANNEL_REVERSE, 1)
             self._forward_pwm.ChangeDutyCycle(
-                self._dutycycle(speed * MAX_FORWARD_SPEED))
+                self._dutycycle(speed * self._max_forward_speed))
         else:
             self._forward_pwm.ChangeDutyCycle(100)
             GPIO.output(CHANNEL_FORWARD, 1)
             self._reverse_pwm.ChangeDutyCycle(
-                self._dutycycle(-speed * MAX_REVERSE_SPEED))
+                self._dutycycle(-speed * self._max_reverse_speed))
 
     def shutdown(self):
         self._forward_pwm.stop()
         self._reverse_pwm.stop()
         GPIO.cleanup()
 
-    def _init_gpio(self):
-        GPIO.setmode(GPIO.BCM)
-        for channel in (CHANNEL_LEFT, CHANNEL_RIGHT,
-                        CHANNEL_FORWARD, CHANNEL_REVERSE):
-            GPIO.setup(channel, GPIO.OUT, initial=GPIO.HIGH)
-        self._forward_pwm = GPIO.PWM(CHANNEL_FORWARD, 10)
-        self._forward_pwm.start(100)
-        self._reverse_pwm = GPIO.PWM(CHANNEL_REVERSE, 10)
-        self._reverse_pwm.start(100)
+    def update_max_speed(self, forward_delta, reverse_delta):
+        self._max_forward_speed = self._squash(
+            self._max_forward_speed + forward_delta)
+        self._max_reverse_speed = self._squash(
+            self._max_reverse_speed + reverse_delta)
+
+    @staticmethod
+    def _squash(val):
+        return min(1.0, max(0.0, val))
 
     def _dutycycle(self, speed, max_speed=1.0):
         return (-speed * max_speed + 1) * 100.
+
+
+class Buttons(object):
+    def __init__(self, joystick):
+        self._current = None
+        self._previous = None
+        self._joystick = joystick
+        self._nbuttons = joystick.get_numbuttons()
+
+    def update(self):
+        self._previous = self._current
+        self._current = tuple(self._joystick.get_button(b)
+                              for b in xrange(self._nbuttons))
+
+    def is_pressed(self, b):
+        return self._current[b] and not self._previous[b]
 
 
 def main():
@@ -73,6 +96,7 @@ def main():
     pygame.joystick.init()
     joystick = pygame.joystick.Joystick(0)
     joystick.init()
+    buttons = Buttons(joystick)
 
     car = Car()
 
@@ -84,8 +108,14 @@ def main():
             x = joystick.get_axis(2)
             y = joystick.get_axis(1)
             print('\rx={:.2f}, y={:.2f}'.format(x, y), end='')
+
             car.set_direction(x)
             car.set_speed(-y)
+
+            buttons.update()
+            forward_delta = .1 * (buttons.is_pressed(4) - buttons.is_pressed(6))
+            reverse_delta = .1 * (buttons.is_pressed(5) - buttons.is_pressed(7))
+            car.update_max_speed(forward_delta, reverse_delta)
     except KeyboardInterrupt:
         pass
     finally:
